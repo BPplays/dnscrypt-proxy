@@ -1,35 +1,49 @@
+//go:build windows
+
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/jedisct1/dlog"
 )
 
-func NetProbe(proxy *Proxy, address string, timeout int) error {
-	if len(address) <= 0 || timeout == 0 {
+
+func NetProbeSingle(
+	proxy *Proxy,
+	address netip.AddrPort,
+	timeout int,
+	ctx context.Context,
+) error {
+	if !address.IsValid() || timeout == 0 {
 		return nil
 	}
-	if captivePortalHandler, err := ColdStart(proxy); err == nil {
-		if captivePortalHandler != nil {
-			defer captivePortalHandler.Stop()
-		}
-	} else {
-		dlog.Critical(err)
-	}
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
-	if err != nil {
-		return err
-	}
+
+	remoteUDPAddr := net.UDPAddrFromAddrPort(address)
+
 	retried := false
 	if timeout < 0 {
 		timeout = MaxTimeout
 	} else {
 		timeout = Min(MaxTimeout, timeout)
 	}
+
+	dialer := net.Dialer{
+		Timeout: proxy.timeout,
+	}
+
 	for tries := timeout; tries > 0; tries-- {
-		pc, err := net.DialTimeout("udp", remoteUDPAddr.String(), proxy.timeout)
+
+		pc, err := dialer.DialContext(
+			ctx,
+			"udp",
+			remoteUDPAddr.String(),
+		)
 		if err == nil {
 			// Write at least 1 byte. This ensures that sockets are ready to use for writing.
 			// Windows specific: during the system startup, sockets can be created but the underlying buffers may not be
@@ -40,19 +54,41 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 				pc.Close()
 			}
 		}
+
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return context.Canceled
+		}
+
 		if err != nil {
 			if !retried {
 				retried = true
-				dlog.Notice("Network not available yet -- waiting...")
+				dlog.Noticef(
+					"(%s) Network not available yet -- waiting...",
+					address.String(),
+				)
 			}
-			dlog.Debug(err)
-			time.Sleep(1 * time.Second)
+			dlog.Debugf(
+				"(%s) %v",
+				address.String(),
+				err,
+			)
+
+			select {
+			case <-ctx.Done():
+				dlog.Debugf(
+					"(%s) context done",
+					address.String(),
+				)
+				return ctx.Err()
+			case <-time.After(time.Second):
+			}
 			continue
 		}
 		pc.Close()
-		dlog.Notice("Network connectivity detected")
 		return nil
 	}
-	dlog.Error("Timeout while waiting for network connectivity")
-	return nil
+	return fmt.Errorf(
+		"(%s) Timeout while waiting for network connectivity",
+		address.String(),
+	)
 }

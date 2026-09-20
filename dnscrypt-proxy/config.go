@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/netip"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,7 +20,12 @@ import (
 
 const (
 	MaxTimeout             = 3600
-	DefaultNetprobeAddress = "9.9.9.9:53"
+)
+var (
+	DefaultNetprobeAddresses = []netip.AddrPort{
+		netip.MustParseAddrPort("[2620:fe::fe]:53"),
+		netip.MustParseAddrPort("9.9.9.9:53"),
+	}
 )
 
 type Config struct {
@@ -95,7 +101,8 @@ type Config struct {
 	TLSCipherSuite           []uint16                    `toml:"tls_cipher_suite"`
 	TLSPreferRSA             bool                        `toml:"tls_prefer_rsa"`
 	TLSKeyLogFile            string                      `toml:"tls_key_log_file"`
-	NetprobeAddress          string                      `toml:"netprobe_address"`
+	NetprobeAddresses        []netip.AddrPort            `toml:"netprobe_addresses"`
+	NetprobeAddress          netip.AddrPort              `toml:"netprobe_address"`
 	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
 	OfflineMode              bool                        `toml:"offline_mode"`
 	HTTPProxyURL             string                      `toml:"http_proxy"`

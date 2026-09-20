@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"math"
 
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"github.com/projectdiscovery/utils/slice"
 	netproxy "golang.org/x/net/proxy"
 )
 
@@ -463,8 +467,40 @@ func configureSourceRestrictions(proxy *Proxy, flags *ConfigFlags, config *Confi
 	proxy.SourceODoH = config.SourceODoH
 }
 
-// determineNetprobeAddress - Determines the address to use for network probing
-func determineNetprobeAddress(flags *ConfigFlags, config *Config) (string, int) {
+// strsToNetipAddrPortsParseLoose - Parses strings to []netip.AddrPort
+//
+// if default_port is a valid uint16 it tries parsing as a netip.Addr with default_port
+func strsToNetipAddrPortsParseLoose(
+	strs []string,
+	default_port int32,
+) (addrs []netip.AddrPort) {
+	for _, str := range strs {
+		addrPort, err := netip.ParseAddrPort(str)
+		if err == nil {
+			addrs = append(addrs, addrPort)
+			continue
+		}
+
+		if default_port < 0 || default_port > math.MaxUint16  {
+			continue
+		}
+
+		addr, err := netip.ParseAddr(str)
+		if err == nil {
+			addrs = append(addrs, netip.AddrPortFrom(
+				addr,
+				uint16(default_port),
+			))
+		}
+	}
+	return addrs
+}
+
+// determineNetprobeAddresses - Determines the address to use for network probing
+func determineNetprobeAddresses(
+	flags *ConfigFlags,
+	config *Config,
+) ([]netip.AddrPort, int) {
 	netprobeTimeout := config.NetprobeTimeout
 	flag.Visit(func(commandLineFlag *flag.Flag) {
 		if commandLineFlag.Name == "netprobe-timeout" && flags.NetprobeTimeoutOverride != nil {
@@ -472,14 +508,29 @@ func determineNetprobeAddress(flags *ConfigFlags, config *Config) (string, int) 
 		}
 	})
 
-	netprobeAddress := DefaultNetprobeAddress
-	if len(config.NetprobeAddress) > 0 {
-		netprobeAddress = config.NetprobeAddress
-	} else if len(config.BootstrapResolvers) > 0 {
-		netprobeAddress = config.BootstrapResolvers[0]
+	netprobeAddresses := slices.Clone(config.NetprobeAddresses)
+
+	if config.NetprobeAddress.IsValid() {
+		netprobeAddresses = append(netprobeAddresses, config.NetprobeAddress)
 	}
 
-	return netprobeAddress, netprobeTimeout
+	if len(netprobeAddresses) <= 0 && len(config.BootstrapResolvers) > 0 {
+		netprobeAddresses = append(
+			netprobeAddresses,
+			strsToNetipAddrPortsParseLoose(config.BootstrapResolvers, 53)...,
+		)
+	}
+
+	if len(netprobeAddresses) <= 0 {
+		netprobeAddresses = append(
+			netprobeAddresses,
+			DefaultNetprobeAddresses...,
+		)
+	}
+
+	netprobeAddresses = sliceutil.Dedupe(netprobeAddresses)
+
+	return netprobeAddresses, netprobeTimeout
 }
 
 // initializeNetworking - Initializes networking
@@ -489,8 +540,8 @@ func initializeNetworking(proxy *Proxy, flags *ConfigFlags, config *Config) erro
 		return nil
 	}
 
-	netprobeAddress, netprobeTimeout := determineNetprobeAddress(flags, config)
-	if err := NetProbe(proxy, netprobeAddress, netprobeTimeout); err != nil {
+	netprobeAddresses, netprobeTimeout := determineNetprobeAddresses(flags, config)
+	if err := NetProbe(proxy, netprobeAddresses, netprobeTimeout); err != nil {
 		return err
 	}
 

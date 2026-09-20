@@ -44,6 +44,10 @@ func NetProbeSingle(
 		)
 
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			dlog.Debugf(
+				"(%s) context done",
+				address.String(),
+			)
 			return context.Canceled
 		}
 

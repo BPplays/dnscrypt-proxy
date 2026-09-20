@@ -38,6 +38,8 @@ func NetProbeSingle(
 	}
 
 	for tries := timeout; tries > 0; tries-- {
+		startTimer := time.NewTimer(time.Second)
+		defer startTimer.Stop()
 
 		pc, err := dialer.DialContext(
 			ctx,
@@ -84,7 +86,7 @@ func NetProbeSingle(
 					address.String(),
 				)
 				return ctx.Err()
-			case <-time.After(time.Second):
+			case <-startTimer.C:
 			}
 			continue
 		}

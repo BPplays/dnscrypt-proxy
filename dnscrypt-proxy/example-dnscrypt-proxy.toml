@@ -373,7 +373,7 @@ ignore_system_dns = true
 
 netprobe_timeout = 60
 
-## Address and port to try initializing a connection to, just to check
+## Addresses with port to try initializing a connection to, just to check
 ## if the network is up. It can be any address and any port, even if
 ## there is nothing answering these on the other side. Just don't use
 ## a local address, as the goal is to check for Internet connectivity.
@@ -382,7 +382,11 @@ netprobe_timeout = 60
 ## On other operating systems, the connection will be initialized
 ## but nothing will be sent at all.
 
-netprobe_address = '9.9.9.9:53'
+
+netprobe_addresses = [
+	'[2620:fe::fe]:53',
+	'9.9.9.9:53',
+]
 
 
 ## Offline mode - Do not use any remote encrypted servers.

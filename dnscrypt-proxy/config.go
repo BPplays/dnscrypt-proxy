@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	MaxTimeout             = 3600 * time.Second
+	MaxTimeout = 3600 * time.Second
 )
+
 var (
 	DefaultNetprobeAddresses = []netip.AddrPort{
 		netip.MustParseAddrPort("[2620:fe::fe]:53"),

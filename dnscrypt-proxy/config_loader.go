@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
@@ -13,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"math"
 
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
@@ -481,7 +481,7 @@ func strsToNetipAddrPortsParseLoose(
 			continue
 		}
 
-		if default_port < 0 || default_port > math.MaxUint16  {
+		if default_port < 0 || default_port > math.MaxUint16 {
 			continue
 		}
 

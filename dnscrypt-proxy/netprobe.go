@@ -25,7 +25,7 @@ func DeadlineInterval(
 
 	// Smallest number of intervals that does not require
 	// an interval larger than the ideal.
-	count = int((remaining + ideal - 1) / ideal)
+	count = int((remaining + ideal - time.Nanosecond) / ideal)
 
 	interval = remaining / time.Duration(count)
 
@@ -51,11 +51,12 @@ func NetProbe(
 	} else {
 		dlog.Critical(err)
 	}
-	start := time.Now()
-	ctx, cancelDial := context.WithDeadline(
-		context.Background(),
-		time.Now().Add(timeout),
-	)
+
+	if timeout < 0 || timeout > MaxTimeout {
+		timeout = MaxTimeout
+	}
+
+	ctx, cancelDial := context.WithTimeout(context.Background(), timeout)
 	defer cancelDial()
 
 	type result struct {
@@ -66,24 +67,30 @@ func NetProbe(
 
 	results := make(chan result, len(addresses))
 
-	var probes_pending int = 0
+	var probesPending int = 0
 	for _, address := range addresses {
 		if !address.IsValid() {
 			continue
 		}
 
-		probes_pending++
+		probesPending++
 		go func(address netip.AddrPort) {
 			ok, err := NetProbeSingle(proxy, address, ctx)
 			results <- result{
-				address:  address,
-				ok:       ok,
-				err:      err,
+				address: address,
+				ok:      ok,
+				err:     err,
 			}
 			if ok {
 				cancelDial()
 			}
 		}(address)
+	}
+	if probesPending == 0 {
+		dlog.Error(
+			"netprobe_addresses non-zero length but all addresses are invalid somehow",
+		)
+		return nil
 	}
 
 	for {
@@ -93,16 +100,14 @@ func NetProbe(
 				dlog.Noticef(
 					"Network connectivity detected (%s)",
 					res.address.String(),
-					)
+				)
 				return nil
 			} else if !errors.Is(res.err, context.Canceled) {
 				dlog.Debugf("(%s) %v", res.address.String(), res.err)
 			}
 
-			probes_pending--
-			if probes_pending <= 0 {
-				elapsed := time.Since(start)
-				fmt.Printf("took %v\n", elapsed)
+			probesPending--
+			if probesPending <= 0 {
 				dlog.Error("Timeout while waiting for network connectivity")
 				return nil
 			}
@@ -116,9 +121,8 @@ func NetProbeSingle(
 	address netip.AddrPort,
 	ctx context.Context,
 ) (ok bool, err error) {
-	if !address.IsValid() || ctx.Err() != nil {
-		return false, nil
-	}
+	if !address.IsValid() { return false, nil }
+	if ctx.Err() != nil { return false, ctx.Err() }
 
 	remoteUDPAddr := net.UDPAddrFromAddrPort(address)
 
@@ -128,9 +132,7 @@ func NetProbeSingle(
 		Timeout: proxy.timeout,
 	}
 
-
 	deadline, deadlineOk := ctx.Deadline()
-
 
 	interval := time.Second
 
@@ -138,7 +140,7 @@ func NetProbeSingle(
 		if i, _, ok := DeadlineInterval(
 			time.Second,
 			deadline,
-			10 * time.Millisecond,
+			10*time.Millisecond,
 		); ok {
 			interval = i
 		}
@@ -193,4 +195,3 @@ func NetProbeSingle(
 		return true, nil
 	}
 }
-

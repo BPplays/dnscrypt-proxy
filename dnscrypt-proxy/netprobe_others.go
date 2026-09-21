@@ -35,7 +35,16 @@ func NetProbeSingle(
 	}
 
 	for tries := int(timeout / time.Second); tries > 0; tries-- {
-		startTimer := time.NewTimer(time.Second)
+		startTimerDur := time.Second
+		if deadline, ok := ctx.Deadline(); ok {
+			deadline = deadline.Add(-10 * time.Millisecond)
+			startTimerDur = min(startTimerDur, time.Until(deadline))
+		}
+
+		startTimer := time.NewTimer(min(
+			timeout,
+			startTimerDur,
+		))
 		defer startTimer.Stop()
 
 		pc, err := dialer.DialContext(

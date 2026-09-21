@@ -68,7 +68,7 @@ func NetProbe(
 					)
 				return nil
 			} else if !errors.Is(res.err, context.Canceled) {
-				dlog.Debug(res.err)
+				dlog.Debugf("(%s) %v", res.address.String(), res.err)
 			}
 
 			probes_pending--

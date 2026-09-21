@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -17,27 +16,52 @@ import (
 func NetProbeSingle(
 	proxy *Proxy,
 	address netip.AddrPort,
-	timeout time.Duration,
 	ctx context.Context,
-) error {
-	if !address.IsValid() || timeout == 0 {
-		return nil
+) (ok bool, err error) {
+	if !address.IsValid() || ctx.Err() != nil {
+		return false, nil
 	}
 
 	remoteUDPAddr := net.UDPAddrFromAddrPort(address)
 
 	retried := false
-	if timeout < 0 || timeout > MaxTimeout {
-		timeout = MaxTimeout
-	}
 
 	dialer := net.Dialer{
 		Timeout: proxy.timeout,
 	}
 
-	for tries := int(timeout / time.Second); tries > 0; tries-- {
-		startTimer := time.NewTimer(time.Second)
-		defer startTimer.Stop()
+
+	deadline, deadlineOk := ctx.Deadline()
+
+	interval := time.Second
+
+	if deadlineOk {
+		inter, _, ok := DeadlineInterval(
+			time.Second,
+			deadline,
+			10 * time.Millisecond,
+		)
+		if ok {
+			interval = inter
+		}
+
+	}
+	fmt.Println(interval)
+
+	for {
+		timerDuration := interval
+		if deadlineOk {
+			timerDuration = min(
+				time.Until(deadline),
+				interval,
+			)
+		}
+
+		if timerDuration <= 0 {
+			return false, nil
+		}
+
+		startTimer := time.NewTimer(timerDuration)
 
 		pc, err := dialer.DialContext(
 			ctx,
@@ -53,14 +77,6 @@ func NetProbeSingle(
 			if err != nil {
 				pc.Close()
 			}
-		}
-
-		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-			dlog.Debugf(
-				"(%s) context done",
-				address.String(),
-			)
-			return context.Canceled
 		}
 
 		if err != nil {
@@ -79,20 +95,17 @@ func NetProbeSingle(
 
 			select {
 			case <-ctx.Done():
+				startTimer.Stop()
 				dlog.Debugf(
 					"(%s) context done",
 					address.String(),
 				)
-				return ctx.Err()
+				return false, ctx.Err()
 			case <-startTimer.C:
 			}
 			continue
 		}
 		pc.Close()
-		return nil
+		return true, nil
 	}
-	return fmt.Errorf(
-		"(%s) Timeout while waiting for network connectivity",
-		address.String(),
-	)
 }

@@ -5,10 +5,34 @@ import (
 	"errors"
 	"net/netip"
 	"time"
+	"fmt"
 
 	"github.com/jedisct1/dlog"
 )
 
+func DeadlineInterval(
+	ideal time.Duration,
+	deadline time.Time,
+	margin time.Duration,
+) (interval time.Duration, count int, ok bool) {
+	remaining := time.Until(deadline) - margin
+
+	if ideal <= 0 || remaining <= 0 {
+		return 0, 0, false
+	}
+
+	// Smallest number of intervals that does not require
+	// an interval larger than the ideal.
+	count = int((remaining + ideal - 1) / ideal)
+
+	interval = remaining / time.Duration(count)
+
+	if interval <= 0 {
+		return 0, 0, false
+	}
+
+	return interval, count, true
+}
 
 func NetProbe(
 	proxy *Proxy,
@@ -25,15 +49,16 @@ func NetProbe(
 	} else {
 		dlog.Critical(err)
 	}
-
+	start := time.Now()
 	ctx, cancelDial := context.WithDeadline(
 		context.Background(),
-		time.Now().Add(timeout).Add(499 * time.Millisecond),
+		time.Now().Add(timeout),
 	)
 	defer cancelDial()
 
 	type result struct {
 		address netip.AddrPort
+		ok      bool
 		err     error
 	}
 
@@ -47,12 +72,13 @@ func NetProbe(
 
 		probes_pending++
 		go func(address netip.AddrPort) {
-			err := NetProbeSingle(proxy, address, timeout, ctx)
+			ok, err := NetProbeSingle(proxy, address, ctx)
 			results <- result{
-				address: address,
-				err:     err,
+				address:  address,
+				ok:       ok,
+				err:      err,
 			}
-			if err == nil {
+			if ok {
 				cancelDial()
 			}
 		}(address)
@@ -61,7 +87,7 @@ func NetProbe(
 	for {
 		select {
 		case res := <-results:
-			if res.err == nil {
+			if res.ok && res.err == nil {
 				dlog.Noticef(
 					"Network connectivity detected (%s)",
 					res.address.String(),
@@ -73,6 +99,8 @@ func NetProbe(
 
 			probes_pending--
 			if probes_pending <= 0 {
+				elapsed := time.Since(start)
+				fmt.Printf("took %v\n", elapsed)
 				dlog.Error("Timeout while waiting for network connectivity")
 				return nil
 			}

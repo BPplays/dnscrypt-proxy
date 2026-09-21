@@ -121,8 +121,12 @@ func NetProbeSingle(
 	address netip.AddrPort,
 	ctx context.Context,
 ) (ok bool, err error) {
-	if !address.IsValid() { return false, nil }
-	if ctx.Err() != nil { return false, ctx.Err() }
+	if !address.IsValid() {
+		return false, nil
+	}
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
 
 	remoteUDPAddr := net.UDPAddrFromAddrPort(address)
 

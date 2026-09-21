@@ -500,7 +500,7 @@ func strsToNetipAddrPortsParseLoose(
 func determineNetprobeAddresses(
 	flags *ConfigFlags,
 	config *Config,
-) ([]netip.AddrPort, int) {
+) ([]netip.AddrPort, time.Duration) {
 	netprobeTimeout := config.NetprobeTimeout
 	flag.Visit(func(commandLineFlag *flag.Flag) {
 		if commandLineFlag.Name == "netprobe-timeout" && flags.NetprobeTimeoutOverride != nil {
@@ -530,7 +530,7 @@ func determineNetprobeAddresses(
 
 	netprobeAddresses = sliceutil.Dedupe(netprobeAddresses)
 
-	return netprobeAddresses, netprobeTimeout
+	return netprobeAddresses, time.Duration(netprobeTimeout) * time.Second
 }
 
 // initializeNetworking - Initializes networking
@@ -541,7 +541,11 @@ func initializeNetworking(proxy *Proxy, flags *ConfigFlags, config *Config) erro
 	}
 
 	netprobeAddresses, netprobeTimeout := determineNetprobeAddresses(flags, config)
-	if err := NetProbe(proxy, netprobeAddresses, netprobeTimeout); err != nil {
+	if err := NetProbe(
+		proxy,
+		netprobeAddresses,
+		netprobeTimeout,
+	); err != nil {
 		return err
 	}
 

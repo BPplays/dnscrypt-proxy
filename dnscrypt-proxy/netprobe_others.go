@@ -16,7 +16,7 @@ import (
 func NetProbeSingle(
 	proxy *Proxy,
 	address netip.AddrPort,
-	timeout int,
+	timeout time.Duration,
 	ctx context.Context,
 ) error {
 	if !address.IsValid() || timeout == 0 {
@@ -26,17 +26,15 @@ func NetProbeSingle(
 	remoteUDPAddr := net.UDPAddrFromAddrPort(address)
 
 	retried := false
-	if timeout < 0 {
+	if timeout < 0 || timeout > MaxTimeout {
 		timeout = MaxTimeout
-	} else {
-		timeout = Min(MaxTimeout, timeout)
 	}
 
 	dialer := net.Dialer{
 		Timeout: proxy.timeout,
 	}
 
-	for tries := timeout; tries > 0; tries-- {
+	for tries := int(timeout / time.Second); tries > 0; tries-- {
 		startTimer := time.NewTimer(time.Second)
 		defer startTimer.Stop()
 

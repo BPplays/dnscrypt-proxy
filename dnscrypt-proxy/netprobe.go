@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"time"
 
 	"github.com/jedisct1/dlog"
 )
 
 
-func NetProbe(proxy *Proxy, addresses []netip.AddrPort, timeout int) error {
+func NetProbe(
+	proxy *Proxy,
+	addresses []netip.AddrPort,
+	timeout time.Duration,
+) error {
 	if len(addresses) == 0 || timeout == 0 {
 		return nil
 	}
@@ -21,7 +26,10 @@ func NetProbe(proxy *Proxy, addresses []netip.AddrPort, timeout int) error {
 		dlog.Critical(err)
 	}
 
-	ctx, cancelDial := context.WithCancel(context.Background())
+	ctx, cancelDial := context.WithDeadline(
+		context.Background(),
+		time.Now().Add(timeout).Add(499 * time.Millisecond),
+	)
 	defer cancelDial()
 
 	type result struct {

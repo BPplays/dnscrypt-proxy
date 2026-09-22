@@ -11,10 +11,10 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
-// DeadlineInterval - Determines an interval that should finish at least margin before deadline
+// DeadlineIntervals - Determines an interval that should finish at least margin before deadline
 //
 // mostly useful with a context.Context deadline
-func DeadlineInterval(
+func DeadlineIntervals(
 	ideal time.Duration,
 	deadline time.Time,
 	margin time.Duration,
@@ -27,7 +27,7 @@ func DeadlineInterval(
 
 	// Smallest number of intervals that does not require
 	// an interval larger than the ideal.
-	count = int((remaining + ideal - time.Nanosecond) / ideal)
+	count = int((remaining + ideal - 1) / ideal)
 
 	interval = remaining / time.Duration(count)
 
@@ -140,7 +140,7 @@ func NetProbeSingle(
 	interval := time.Second
 
 	if deadlineOk {
-		if i, _, ok := DeadlineInterval(
+		if i, _, ok := DeadlineIntervals(
 			time.Second,
 			deadline,
 			10*time.Millisecond,
@@ -169,7 +169,7 @@ func NetProbeSingle(
 		}
 
 		if err != nil {
-			if !retried {
+			if !retried && !errors.Is(ctx.Err(), context.Canceled) {
 				retried = true
 				dlog.Noticef(
 					"(%s) Network not available yet -- waiting...",

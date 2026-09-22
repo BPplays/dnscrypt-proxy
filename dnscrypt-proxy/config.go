@@ -103,7 +103,7 @@ type Config struct {
 	TLSPreferRSA             bool                        `toml:"tls_prefer_rsa"`
 	TLSKeyLogFile            string                      `toml:"tls_key_log_file"`
 	NetprobeAddresses        []netip.AddrPort            `toml:"netprobe_addresses"`
-	NetprobeAddress          netip.AddrPort              `toml:"netprobe_address"`
+	NetprobeAddressLegacy    netip.AddrPort              `toml:"netprobe_address"`
 	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
 	OfflineMode              bool                        `toml:"offline_mode"`
 	HTTPProxyURL             string                      `toml:"http_proxy"`

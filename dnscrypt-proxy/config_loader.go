@@ -515,8 +515,18 @@ func determineNetprobeAddresses(
 
 	netprobeAddresses := slices.Clone(config.NetprobeAddresses)
 
-	if config.NetprobeAddress.IsValid() {
-		netprobeAddresses = append(netprobeAddresses, config.NetprobeAddress)
+	if config.NetprobeAddressLegacy.IsValid() {
+		if len(netprobeAddresses) <= 0 {
+			dlog.Warn(
+				"netprobe_address was changed to a netprobe_addresses, a list - Please update your configuration",
+			)
+			netprobeAddresses = append(netprobeAddresses, config.NetprobeAddressLegacy)
+		} else {
+			dlog.Error(
+				"Can't use a list of netprobe_addresses at the same time as a netprobe_address",
+			)
+
+		}
 	}
 
 	if len(netprobeAddresses) <= 0 && len(config.BootstrapResolvers) > 0 {

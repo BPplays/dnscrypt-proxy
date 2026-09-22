@@ -539,7 +539,7 @@ func determineNetprobeAddresses(
 	if len(netprobeAddresses) <= 0 {
 		netprobeAddresses = append(
 			netprobeAddresses,
-			DefaultNetprobeAddresses...,
+			GetDefaultNetprobeAddresses()...,
 		)
 	}
 

@@ -19,14 +19,7 @@ import (
 )
 
 const (
-	MaxTimeout = 3600 * time.Second
-)
-
-var (
-	DefaultNetprobeAddresses = []netip.AddrPort{
-		netip.MustParseAddrPort("[2620:fe::fe]:53"),
-		netip.MustParseAddrPort("9.9.9.9:53"),
-	}
+	MaxTimeout = time.Hour
 )
 
 type Config struct {
@@ -785,3 +778,11 @@ func isIPAndPort(addrStr string) error {
 	}
 	return nil
 }
+
+func GetDefaultNetprobeAddresses() ([]netip.AddrPort) {
+	return []netip.AddrPort{
+		netip.MustParseAddrPort("[2620:fe::fe]:53"),
+		netip.MustParseAddrPort("9.9.9.9:53"),
+	}
+}
+

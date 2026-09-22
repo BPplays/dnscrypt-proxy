@@ -41,9 +41,9 @@ func DeadlineInterval(
 func NetProbe(
 	proxy *Proxy,
 	addresses []netip.AddrPort,
-	timeout time.Duration,
+	ctx context.Context,
 ) error {
-	if len(addresses) == 0 || timeout == 0 {
+	if len(addresses) == 0 || ctx.Err() != nil {
 		return nil
 	}
 	if captivePortalHandler, err := ColdStart(proxy); err == nil {
@@ -54,11 +54,8 @@ func NetProbe(
 		dlog.Critical(err)
 	}
 
-	if timeout < 0 || timeout > MaxTimeout {
-		timeout = MaxTimeout
-	}
 
-	ctx, cancelDial := context.WithTimeout(context.Background(), timeout)
+	ctx, cancelDial := context.WithCancel(ctx)
 	defer cancelDial()
 
 	type result struct {

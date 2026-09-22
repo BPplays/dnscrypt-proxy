@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -501,12 +502,16 @@ func determineNetprobeAddresses(
 	flags *ConfigFlags,
 	config *Config,
 ) ([]netip.AddrPort, time.Duration) {
-	netprobeTimeout := config.NetprobeTimeout
+	netprobeTimeout := time.Duration(config.NetprobeTimeout) * time.Second
 	flag.Visit(func(commandLineFlag *flag.Flag) {
 		if commandLineFlag.Name == "netprobe-timeout" && flags.NetprobeTimeoutOverride != nil {
-			netprobeTimeout = *flags.NetprobeTimeoutOverride
+			netprobeTimeout = time.Duration(*flags.NetprobeTimeoutOverride) * time.Second
 		}
 	})
+
+	if netprobeTimeout < 0 || netprobeTimeout > MaxTimeout {
+		netprobeTimeout = MaxTimeout
+	}
 
 	netprobeAddresses := slices.Clone(config.NetprobeAddresses)
 
@@ -530,7 +535,8 @@ func determineNetprobeAddresses(
 
 	netprobeAddresses = sliceutil.Dedupe(netprobeAddresses)
 
-	return netprobeAddresses, time.Duration(netprobeTimeout) * time.Second
+
+	return netprobeAddresses, netprobeTimeout
 }
 
 // initializeNetworking - Initializes networking
@@ -541,10 +547,13 @@ func initializeNetworking(proxy *Proxy, flags *ConfigFlags, config *Config) erro
 	}
 
 	netprobeAddresses, netprobeTimeout := determineNetprobeAddresses(flags, config)
+
+	ctx, cancel := context.WithTimeout(context.Background(), netprobeTimeout)
+	defer cancel()
 	if err := NetProbe(
 		proxy,
 		netprobeAddresses,
-		netprobeTimeout,
+		ctx,
 	); err != nil {
 		return err
 	}

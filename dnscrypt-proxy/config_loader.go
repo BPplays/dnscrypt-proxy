@@ -496,7 +496,7 @@ func strsToNetipAddrPortsParseLoose(
 	return addrs
 }
 
-// determineNetprobeAddresses - Determines the address to use for network probing
+// determineNetprobeAddresses - Determines the addresses to use for network probing
 func determineNetprobeAddresses(
 	flags *ConfigFlags,
 	config *Config,

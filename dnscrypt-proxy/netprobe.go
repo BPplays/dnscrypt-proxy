@@ -88,7 +88,7 @@ func NetProbe(
 			}
 		}(address)
 	}
-	if probesPending == 0 {
+	if probesPending <= 0 {
 		dlog.Error(
 			"netprobe_addresses non-zero length but all addresses are invalid somehow",
 		)

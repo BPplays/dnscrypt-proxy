@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"net/netip"
 	"runtime"
 	"time"
 
@@ -40,10 +39,10 @@ func DeadlineIntervals(
 
 func NetProbe(
 	proxy *Proxy,
-	addresses []netip.AddrPort,
+	hosts_port []string,
 	ctx context.Context,
 ) error {
-	if len(addresses) == 0 || ctx.Err() != nil {
+	if len(hosts_port) == 0 || ctx.Err() != nil {
 		return nil
 	}
 	if captivePortalHandler, err := ColdStart(proxy); err == nil {
@@ -59,31 +58,31 @@ func NetProbe(
 	defer cancelDial()
 
 	type result struct {
-		address netip.AddrPort
-		ok      bool
-		err     error
+		host string
+		ok   bool
+		err  error
 	}
 
-	results := make(chan result, len(addresses))
+	results := make(chan result, len(hosts_port))
 
 	var probesPending int = 0
-	for _, address := range addresses {
-		if !address.IsValid() {
+	for _, host := range hosts_port {
+		if len(host) <= 0 {
 			continue
 		}
 
 		probesPending++
-		go func(address netip.AddrPort) {
-			ok, err := NetProbeSingle(proxy, address, ctx)
+		go func(host string) {
+			ok, err := NetProbeSingle(proxy, host, ctx)
 			results <- result{
-				address: address,
-				ok:      ok,
-				err:     err,
+				host: host,
+				ok:   ok,
+				err:  err,
 			}
 			if ok {
 				cancelDial()
 			}
-		}(address)
+		}(host)
 	}
 	if probesPending <= 0 {
 		dlog.Error(
@@ -98,11 +97,11 @@ func NetProbe(
 			if res.ok && res.err == nil {
 				dlog.Noticef(
 					"Network connectivity detected (%s)",
-					res.address.String(),
+					res.host,
 				)
 				return nil
 			} else if !errors.Is(res.err, context.Canceled) {
-				dlog.Debugf("(%s) %v", res.address.String(), res.err)
+				dlog.Debugf("(%s) %v", res.host, res.err)
 			}
 
 			probesPending--
@@ -117,17 +116,20 @@ func NetProbe(
 
 func NetProbeSingle(
 	proxy *Proxy,
-	address netip.AddrPort,
+	host_port string,
 	ctx context.Context,
 ) (ok bool, err error) {
-	if !address.IsValid() {
+	if len(host_port) <= 0 {
 		return false, nil
 	}
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
 
-	remoteUDPAddr := net.UDPAddrFromAddrPort(address)
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", host_port)
+	if err != nil {
+		return false, err
+	}
 
 	retried := false
 
@@ -173,12 +175,12 @@ func NetProbeSingle(
 				retried = true
 				dlog.Noticef(
 					"(%s) Network not available yet -- waiting...",
-					address.String(),
+					host_port,
 				)
 			}
 			dlog.Debugf(
 				"(%s) %v",
-				address.String(),
+				host_port,
 				err,
 			)
 
@@ -186,7 +188,7 @@ func NetProbeSingle(
 			case <-ctx.Done():
 				dlog.Debugf(
 					"(%s) context done",
-					address.String(),
+					host_port,
 				)
 				return false, ctx.Err()
 			case <-startTimer.C:

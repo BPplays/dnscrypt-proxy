@@ -11,6 +11,9 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
+// DeadlineInterval - Determines an interval that should finish at least margin before deadline
+//
+// mostly useful with a context.Context deadline
 func DeadlineInterval(
 	ideal time.Duration,
 	deadline time.Time,

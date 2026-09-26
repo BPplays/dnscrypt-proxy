@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"runtime"
 	"time"
@@ -100,7 +101,8 @@ func NetProbe(
 					res.host,
 				)
 				return nil
-			} else if !errors.Is(res.err, context.Canceled) {
+			} else if !errors.Is(res.err, context.Canceled) &&
+					  !errors.Is(res.err, context.DeadlineExceeded) {
 				dlog.Debugf("(%s) %v", res.host, res.err)
 			}
 
@@ -126,12 +128,7 @@ func NetProbeSingle(
 		return false, ctx.Err()
 	}
 
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", host_port)
-	if err != nil {
-		return false, err
-	}
-
-	retried := false
+	loggedMessages := make(map[string]struct{})
 
 	dialer := net.Dialer{
 		Timeout: proxy.timeout,
@@ -157,7 +154,7 @@ func NetProbeSingle(
 		pc, err := dialer.DialContext(
 			ctx,
 			"udp",
-			remoteUDPAddr.String(),
+			host_port,
 		)
 		if runtime.GOOS == "windows" && err == nil {
 			// Write at least 1 byte. This ensures that sockets are ready to use for writing.
@@ -171,13 +168,32 @@ func NetProbeSingle(
 		}
 
 		if err != nil {
-			if !retried && !errors.Is(ctx.Err(), context.Canceled) {
-				retried = true
-				dlog.Noticef(
+			msg := ""
+			var dnsErr *net.DNSError
+			errors.As(err, &dnsErr)
+
+			switch {
+			case ctx.Err() != nil:
+				msg = ""
+			case dnsErr != nil && (dnsErr.Timeout() || dnsErr.IsNotFound):
+				msg = fmt.Sprintf(
+					"(%s) Name resolution error: %v",
+					host_port,
+					dnsErr,
+				)
+			default:
+				msg = fmt.Sprintf(
 					"(%s) Network not available yet -- waiting...",
 					host_port,
 				)
 			}
+
+
+			if _, exists := loggedMessages[msg]; !exists && msg != "" {
+				dlog.Notice(msg)
+				loggedMessages[msg] = struct{}{}
+			}
+
 			dlog.Debugf(
 				"(%s) %v",
 				host_port,
